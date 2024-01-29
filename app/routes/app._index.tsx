@@ -1,20 +1,21 @@
-import { useEffect } from "react";
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { json } from "@remix-run/node";
-import { useActionData, useNavigation, useSubmit } from "@remix-run/react";
+import { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import {
-  Page,
-  Layout,
+  TextField,
+  IndexTable,
+  LegacyCard,
+  IndexFilters,
+  useSetIndexFiltersMode,
+  useIndexResourceState,
   Text,
-  Card,
-  Button,
-  BlockStack,
-  Box,
-  List,
-  Link,
-  InlineStack,
+  ChoiceList,
+  RangeSlider,
+  Badge,
+  useBreakpoints,
+  Page,
 } from "@shopify/polaris";
-import { authenticate } from "../shopify.server";
+import type { IndexFiltersProps, TabProps } from "@shopify/polaris";
+import { useState, useCallback } from "react";
+import { authenticate } from "~/shopify.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
@@ -22,260 +23,389 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return null;
 };
 
-export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin } = await authenticate.admin(request);
-  const color = ["Red", "Orange", "Yellow", "Green"][
-    Math.floor(Math.random() * 4)
-  ];
-  const response = await admin.graphql(
-    `#graphql
-      mutation populateProduct($input: ProductInput!) {
-        productCreate(input: $input) {
-          product {
-            id
-            title
-            handle
-            status
-            variants(first: 10) {
-              edges {
-                node {
-                  id
-                  price
-                  barcode
-                  createdAt
-                }
-              }
-            }
-          }
-        }
-      }`,
-    {
-      variables: {
-        input: {
-          title: `${color} Snowboard`,
-          variants: [{ price: Math.random() * 100 }],
-        },
-      },
-    }
-  );
-  const responseJson = await response.json();
-
-  return json({
-    product: responseJson.data?.productCreate?.product,
-  });
-};
+export const action = async ({ request }: ActionFunctionArgs) => {};
 
 export default function Index() {
-  const nav = useNavigation();
-  const actionData = useActionData<typeof action>();
-  const submit = useSubmit();
-  const isLoading =
-    ["loading", "submitting"].includes(nav.state) && nav.formMethod === "POST";
-  const productId = actionData?.product?.id.replace(
-    "gid://shopify/Product/",
-    ""
-  );
+  const sleep = (ms: number) =>
+    new Promise((resolve) => setTimeout(resolve, ms));
+  const [itemStrings, setItemStrings] = useState(["All"]);
+  const deleteView = (index: number) => {
+    const newItemStrings = [...itemStrings];
+    newItemStrings.splice(index, 1);
+    setItemStrings(newItemStrings);
+    setSelected(0);
+  };
 
-  useEffect(() => {
-    if (productId) {
-      shopify.toast.show("Product created");
-    }
-  }, [productId]);
-  const generateProduct = () => submit({}, { replace: true, method: "POST" });
+  const duplicateView = async (name: string) => {
+    setItemStrings([...itemStrings, name]);
+    setSelected(itemStrings.length);
+    await sleep(1);
+    return true;
+  };
+
+  const tabs: TabProps[] = itemStrings.map((item, index) => ({
+    content: item,
+    index,
+    onAction: () => {},
+    id: `${item}-${index}`,
+    isLocked: index === 0,
+    actions:
+      index === 0
+        ? []
+        : [
+            {
+              type: "rename",
+              onAction: () => {},
+              onPrimaryAction: async (value: string): Promise<boolean> => {
+                const newItemsStrings = tabs.map((item, idx) => {
+                  if (idx === index) {
+                    return value;
+                  }
+                  return item.content;
+                });
+                await sleep(1);
+                setItemStrings(newItemsStrings);
+                return true;
+              },
+            },
+            {
+              type: "duplicate",
+              onPrimaryAction: async (value: string): Promise<boolean> => {
+                await sleep(1);
+                duplicateView(value);
+                return true;
+              },
+            },
+            {
+              type: "edit",
+            },
+            {
+              type: "delete",
+              onPrimaryAction: async () => {
+                await sleep(1);
+                deleteView(index);
+                return true;
+              },
+            },
+          ],
+  }));
+  const [selected, setSelected] = useState(0);
+  const onCreateNewView = async (value: string) => {
+    await sleep(500);
+    setItemStrings([...itemStrings, value]);
+    setSelected(itemStrings.length);
+    return true;
+  };
+  const sortOptions: IndexFiltersProps["sortOptions"] = [
+    { label: "Order", value: "order asc", directionLabel: "Ascending" },
+    { label: "Order", value: "order desc", directionLabel: "Descending" },
+    { label: "Customer", value: "customer asc", directionLabel: "A-Z" },
+    { label: "Customer", value: "customer desc", directionLabel: "Z-A" },
+    { label: "Date", value: "date asc", directionLabel: "A-Z" },
+    { label: "Date", value: "date desc", directionLabel: "Z-A" },
+    { label: "Total", value: "total asc", directionLabel: "Ascending" },
+    { label: "Total", value: "total desc", directionLabel: "Descending" },
+  ];
+  const [sortSelected, setSortSelected] = useState(["order asc"]);
+  const { mode, setMode } = useSetIndexFiltersMode();
+  const onHandleCancel = () => {};
+
+  const onHandleSave = async () => {
+    await sleep(1);
+    return true;
+  };
+
+  const primaryAction: IndexFiltersProps["primaryAction"] =
+    selected === 0
+      ? {
+          type: "save-as",
+          onAction: onCreateNewView,
+          disabled: false,
+          loading: false,
+        }
+      : {
+          type: "save",
+          onAction: onHandleSave,
+          disabled: false,
+          loading: false,
+        };
+  const [accountStatus, setAccountStatus] = useState<string[] | undefined>(
+    undefined,
+  );
+  const [moneySpent, setMoneySpent] = useState<[number, number] | undefined>(
+    undefined,
+  );
+  const [taggedWith, setTaggedWith] = useState("");
+  const [queryValue, setQueryValue] = useState("");
+
+  const handleAccountStatusChange = useCallback(
+    (value: string[]) => setAccountStatus(value),
+    [],
+  );
+  const handleMoneySpentChange = useCallback(
+    (value: [number, number]) => setMoneySpent(value),
+    [],
+  );
+  const handleTaggedWithChange = useCallback(
+    (value: string) => setTaggedWith(value),
+    [],
+  );
+  const handleFiltersQueryChange = useCallback(
+    (value: string) => setQueryValue(value),
+    [],
+  );
+  const handleAccountStatusRemove = useCallback(
+    () => setAccountStatus(undefined),
+    [],
+  );
+  const handleMoneySpentRemove = useCallback(
+    () => setMoneySpent(undefined),
+    [],
+  );
+  const handleTaggedWithRemove = useCallback(() => setTaggedWith(""), []);
+  const handleQueryValueRemove = useCallback(() => setQueryValue(""), []);
+  const handleFiltersClearAll = useCallback(() => {
+    handleAccountStatusRemove();
+    handleMoneySpentRemove();
+    handleTaggedWithRemove();
+    handleQueryValueRemove();
+  }, [
+    handleAccountStatusRemove,
+    handleMoneySpentRemove,
+    handleQueryValueRemove,
+    handleTaggedWithRemove,
+  ]);
+
+  const filters = [
+    {
+      key: "accountStatus",
+      label: "Account status",
+      filter: (
+        <ChoiceList
+          title="Account status"
+          titleHidden
+          choices={[
+            { label: "Enabled", value: "enabled" },
+            { label: "Not invited", value: "not invited" },
+            { label: "Invited", value: "invited" },
+            { label: "Declined", value: "declined" },
+          ]}
+          selected={accountStatus || []}
+          onChange={handleAccountStatusChange}
+          allowMultiple
+        />
+      ),
+      shortcut: true,
+    },
+    {
+      key: "taggedWith",
+      label: "Tagged with",
+      filter: (
+        <TextField
+          label="Tagged with"
+          value={taggedWith}
+          onChange={handleTaggedWithChange}
+          autoComplete="off"
+          labelHidden
+        />
+      ),
+      shortcut: true,
+    },
+    {
+      key: "moneySpent",
+      label: "Money spent",
+      filter: (
+        <RangeSlider
+          label="Money spent is between"
+          labelHidden
+          value={moneySpent || [0, 500]}
+          prefix="$"
+          output
+          min={0}
+          max={2000}
+          step={1}
+          onChange={handleMoneySpentChange}
+        />
+      ),
+    },
+  ];
+
+  const appliedFilters: IndexFiltersProps["appliedFilters"] = [];
+  if (accountStatus && !isEmpty(accountStatus)) {
+    const key = "accountStatus";
+    appliedFilters.push({
+      key,
+      label: disambiguateLabel(key, accountStatus),
+      onRemove: handleAccountStatusRemove,
+    });
+  }
+  if (moneySpent) {
+    const key = "moneySpent";
+    appliedFilters.push({
+      key,
+      label: disambiguateLabel(key, moneySpent),
+      onRemove: handleMoneySpentRemove,
+    });
+  }
+  if (!isEmpty(taggedWith)) {
+    const key = "taggedWith";
+    appliedFilters.push({
+      key,
+      label: disambiguateLabel(key, taggedWith),
+      onRemove: handleTaggedWithRemove,
+    });
+  }
+
+  const orders = [
+    {
+      id: "1020",
+      order: (
+        <Text as="span" variant="bodyMd" fontWeight="semibold">
+          #1020
+        </Text>
+      ),
+      date: "Jul 20 at 4:34pm",
+      customer: "Jaydon Stanton",
+      total: "$969.44",
+      paymentStatus: <Badge progress="complete">Paid</Badge>,
+      fulfillmentStatus: <Badge progress="incomplete">Unfulfilled</Badge>,
+    },
+    {
+      id: "1019",
+      order: (
+        <Text as="span" variant="bodyMd" fontWeight="semibold">
+          #1019
+        </Text>
+      ),
+      date: "Jul 20 at 3:46pm",
+      customer: "Ruben Westerfelt",
+      total: "$701.19",
+      paymentStatus: <Badge progress="partiallyComplete">Partially paid</Badge>,
+      fulfillmentStatus: <Badge progress="incomplete">Unfulfilled</Badge>,
+    },
+    {
+      id: "1018",
+      order: (
+        <Text as="span" variant="bodyMd" fontWeight="semibold">
+          #1018
+        </Text>
+      ),
+      date: "Jul 20 at 3.44pm",
+      customer: "Leo Carder",
+      total: "$798.24",
+      paymentStatus: <Badge progress="complete">Paid</Badge>,
+      fulfillmentStatus: <Badge progress="incomplete">Unfulfilled</Badge>,
+    },
+  ];
+  const resourceName = {
+    singular: "order",
+    plural: "orders",
+  };
+
+  const { selectedResources, allResourcesSelected, handleSelectionChange } =
+    useIndexResourceState(orders);
+
+  const rowMarkup = orders.map(
+    (
+      { id, order, date, customer, total, paymentStatus, fulfillmentStatus },
+      index,
+    ) => (
+      <IndexTable.Row
+        id={id}
+        key={id}
+        selected={selectedResources.includes(id)}
+        position={index}
+      >
+        <IndexTable.Cell>
+          <Text variant="bodyMd" fontWeight="bold" as="span">
+            {order}
+          </Text>
+        </IndexTable.Cell>
+        <IndexTable.Cell>{date}</IndexTable.Cell>
+        <IndexTable.Cell>{customer}</IndexTable.Cell>
+        <IndexTable.Cell>
+          <Text as="span" alignment="end" numeric>
+            {total}
+          </Text>
+        </IndexTable.Cell>
+        <IndexTable.Cell>{paymentStatus}</IndexTable.Cell>
+        <IndexTable.Cell>{fulfillmentStatus}</IndexTable.Cell>
+      </IndexTable.Row>
+    ),
+  );
 
   return (
-    <Page>
-      <ui-title-bar title="Remix app template">
-        <button variant="primary" onClick={generateProduct}>
-          Generate a product
+    <Page fullWidth>
+      <ui-title-bar title="File List">
+        <button variant="primary" onClick={() => {}}>
+          Add File
         </button>
       </ui-title-bar>
-      <BlockStack gap="500">
-        <Layout>
-          <Layout.Section>
-            <Card>
-              <BlockStack gap="500">
-                <BlockStack gap="200">
-                  <Text as="h2" variant="headingMd">
-                    Congrats on creating a new Shopify app 🎉
-                  </Text>
-                  <Text variant="bodyMd" as="p">
-                    This embedded app template uses{" "}
-                    <Link
-                      url="https://shopify.dev/docs/apps/tools/app-bridge"
-                      target="_blank"
-                      removeUnderline
-                    >
-                      App Bridge
-                    </Link>{" "}
-                    interface examples like an{" "}
-                    <Link url="/app/additional" removeUnderline>
-                      additional page in the app nav
-                    </Link>
-                    , as well as an{" "}
-                    <Link
-                      url="https://shopify.dev/docs/api/admin-graphql"
-                      target="_blank"
-                      removeUnderline
-                    >
-                      Admin GraphQL
-                    </Link>{" "}
-                    mutation demo, to provide a starting point for app
-                    development.
-                  </Text>
-                </BlockStack>
-                <BlockStack gap="200">
-                  <Text as="h3" variant="headingMd">
-                    Get started with products
-                  </Text>
-                  <Text as="p" variant="bodyMd">
-                    Generate a product with GraphQL and get the JSON output for
-                    that product. Learn more about the{" "}
-                    <Link
-                      url="https://shopify.dev/docs/api/admin-graphql/latest/mutations/productCreate"
-                      target="_blank"
-                      removeUnderline
-                    >
-                      productCreate
-                    </Link>{" "}
-                    mutation in our API references.
-                  </Text>
-                </BlockStack>
-                <InlineStack gap="300">
-                  <Button loading={isLoading} onClick={generateProduct}>
-                    Generate a product
-                  </Button>
-                  {actionData?.product && (
-                    <Button
-                      url={`shopify:admin/products/${productId}`}
-                      target="_blank"
-                      variant="plain"
-                    >
-                      View product
-                    </Button>
-                  )}
-                </InlineStack>
-                {actionData?.product && (
-                  <Box
-                    padding="400"
-                    background="bg-surface-active"
-                    borderWidth="025"
-                    borderRadius="200"
-                    borderColor="border"
-                    overflowX="scroll"
-                  >
-                    <pre style={{ margin: 0 }}>
-                      <code>{JSON.stringify(actionData.product, null, 2)}</code>
-                    </pre>
-                  </Box>
-                )}
-              </BlockStack>
-            </Card>
-          </Layout.Section>
-          <Layout.Section variant="oneThird">
-            <BlockStack gap="500">
-              <Card>
-                <BlockStack gap="200">
-                  <Text as="h2" variant="headingMd">
-                    App template specs
-                  </Text>
-                  <BlockStack gap="200">
-                    <InlineStack align="space-between">
-                      <Text as="span" variant="bodyMd">
-                        Framework
-                      </Text>
-                      <Link
-                        url="https://remix.run"
-                        target="_blank"
-                        removeUnderline
-                      >
-                        Remix
-                      </Link>
-                    </InlineStack>
-                    <InlineStack align="space-between">
-                      <Text as="span" variant="bodyMd">
-                        Database
-                      </Text>
-                      <Link
-                        url="https://www.prisma.io/"
-                        target="_blank"
-                        removeUnderline
-                      >
-                        Prisma
-                      </Link>
-                    </InlineStack>
-                    <InlineStack align="space-between">
-                      <Text as="span" variant="bodyMd">
-                        Interface
-                      </Text>
-                      <span>
-                        <Link
-                          url="https://polaris.shopify.com"
-                          target="_blank"
-                          removeUnderline
-                        >
-                          Polaris
-                        </Link>
-                        {", "}
-                        <Link
-                          url="https://shopify.dev/docs/apps/tools/app-bridge"
-                          target="_blank"
-                          removeUnderline
-                        >
-                          App Bridge
-                        </Link>
-                      </span>
-                    </InlineStack>
-                    <InlineStack align="space-between">
-                      <Text as="span" variant="bodyMd">
-                        API
-                      </Text>
-                      <Link
-                        url="https://shopify.dev/docs/api/admin-graphql"
-                        target="_blank"
-                        removeUnderline
-                      >
-                        GraphQL API
-                      </Link>
-                    </InlineStack>
-                  </BlockStack>
-                </BlockStack>
-              </Card>
-              <Card>
-                <BlockStack gap="200">
-                  <Text as="h2" variant="headingMd">
-                    Next steps
-                  </Text>
-                  <List>
-                    <List.Item>
-                      Build an{" "}
-                      <Link
-                        url="https://shopify.dev/docs/apps/getting-started/build-app-example"
-                        target="_blank"
-                        removeUnderline
-                      >
-                        {" "}
-                        example app
-                      </Link>{" "}
-                      to get started
-                    </List.Item>
-                    <List.Item>
-                      Explore Shopify’s API with{" "}
-                      <Link
-                        url="https://shopify.dev/docs/apps/tools/graphiql-admin-api"
-                        target="_blank"
-                        removeUnderline
-                      >
-                        GraphiQL
-                      </Link>
-                    </List.Item>
-                  </List>
-                </BlockStack>
-              </Card>
-            </BlockStack>
-          </Layout.Section>
-        </Layout>
-      </BlockStack>
+      <IndexFilters
+        sortOptions={sortOptions}
+        sortSelected={sortSelected}
+        queryValue={queryValue}
+        queryPlaceholder="Searching in all"
+        onQueryChange={handleFiltersQueryChange}
+        onQueryClear={() => setQueryValue("")}
+        onSort={setSortSelected}
+        primaryAction={primaryAction}
+        cancelAction={{
+          onAction: onHandleCancel,
+          disabled: false,
+          loading: false,
+        }}
+        tabs={tabs}
+        selected={selected}
+        onSelect={setSelected}
+        canCreateNewView
+        onCreateNewView={onCreateNewView}
+        filters={filters}
+        appliedFilters={appliedFilters}
+        onClearAll={handleFiltersClearAll}
+        mode={mode}
+        setMode={setMode}
+      />
+      <IndexTable
+        condensed={useBreakpoints().smDown}
+        resourceName={resourceName}
+        itemCount={orders.length}
+        selectedItemsCount={
+          allResourcesSelected ? "All" : selectedResources.length
+        }
+        onSelectionChange={handleSelectionChange}
+        headings={[
+          { title: "Order" },
+          { title: "Date" },
+          { title: "Customer" },
+          { title: "Total", alignment: "end" },
+          { title: "Payment status" },
+          { title: "Fulfillment status" },
+        ]}
+      >
+        {rowMarkup}
+      </IndexTable>
     </Page>
   );
+
+  function disambiguateLabel(key: string, value: string | any[]): string {
+    switch (key) {
+      case "moneySpent":
+        return `Money spent is between $${value[0]} and $${value[1]}`;
+      case "taggedWith":
+        return `Tagged with ${value}`;
+      case "accountStatus":
+        return (value as string[]).map((val) => `Customer ${val}`).join(", ");
+      default:
+        return value as string;
+    }
+  }
+
+  function isEmpty(value: string | string[]): boolean {
+    if (Array.isArray(value)) {
+      return value.length === 0;
+    } else {
+      return value === "" || value == null;
+    }
+  }
 }

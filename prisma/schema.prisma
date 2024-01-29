@@ -20,3 +20,11 @@ model Session {
   accessToken String
   userId      BigInt?
 }
+
+model File {
+  id        String   @id @default(cuid())
+  name      String
+  status    String
+  size      String
+  createdAt DateTime @default(now())
+}
