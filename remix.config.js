@@ -17,4 +17,20 @@ module.exports = {
   serverModuleFormat: "cjs",
   dev: { port: process.env.HMR_SERVER_PORT || 8002 },
   future: {},
+  browserNodeBuiltinsPolyfill: {
+    modules: {
+      buffer: true, // Provide a JSPM polyfill
+      fs: "empty", // Provide an empty polyfill
+      path: true,
+      stream: true,
+      events: true,
+      util: true,
+      os: true,
+      crypto: true,
+      buffer: true,
+    },
+    globals: {
+      Buffer: true,
+    },
+  },
 };

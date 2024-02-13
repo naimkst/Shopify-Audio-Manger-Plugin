@@ -2,7 +2,6 @@ import { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import {
   TextField,
   IndexTable,
-  LegacyCard,
   IndexFilters,
   useSetIndexFiltersMode,
   useIndexResourceState,
@@ -12,10 +11,24 @@ import {
   Badge,
   useBreakpoints,
   Page,
+  Box,
+  InlineStack,
+  Link,
+  Tooltip,
+  Icon,
 } from "@shopify/polaris";
 import type { IndexFiltersProps, TabProps } from "@shopify/polaris";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { FileUpload } from "~/component/FileUpload";
 import { authenticate } from "~/shopify.server";
+import {
+  CheckIcon,
+  DeleteIcon,
+  ViewIcon,
+  LinkIcon,
+} from "@shopify/polaris-icons";
+import copy from "copy-to-clipboard";
+import { API_URL } from "utils/env";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
@@ -26,6 +39,58 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export const action = async ({ request }: ActionFunctionArgs) => {};
 
 export default function Index() {
+  const [active, setActive] = useState(true);
+  const [popupEvent, setPopuupEvent] = useState("0");
+  const [audio, setAudio] = useState([]);
+  const toggleActive = useCallback(() => setActive((active) => !active), []);
+
+  const fetchData = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/audio`); // Replace with your API endpoint
+      const data = await response.json();
+      setAudio(data.data);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
+  };
+
+  const deleteData = async (id: string) => {
+    try {
+      const response = await fetch(`${API_URL}/api/audio`, {
+        method: "put",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: id,
+        }),
+      }); // Replace with your API endpoint
+      const data = await response.json();
+      console.log(data.message);
+      shopify.toast.show(data.message);
+      fetchData();
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
+  };
+
+  function dateTime(date: any) {
+    const inputDateString = date ? date : new Date();
+    const inputDate = new Date(inputDateString);
+
+    const day = String(inputDate.getDate()).padStart(2, "0");
+    const month = String(inputDate.getMonth() + 1).padStart(2, "0"); // Month is zero-based
+    const year = inputDate.getFullYear();
+
+    const formattedDate = `${day}/${month}/${year}`;
+
+    console.log(formattedDate); // Output: 19/01/2024
+    return formattedDate;
+  }
+
+  function bytesToMB(bytes: any) {
+    const megabytes = bytes / (1024 * 1024);
+    return megabytes.toFixed(2) + " MB";
+  }
+
   const sleep = (ms: number) =>
     new Promise((resolve) => setTimeout(resolve, ms));
   const [itemStrings, setItemStrings] = useState(["All"]);
@@ -36,12 +101,21 @@ export default function Index() {
     setSelected(0);
   };
 
+  const copyLink = (link: any) => {
+    const url = `${API_URL}/uploads/${link}`;
+    copy(url);
+    shopify.toast.show("Copy Link");
+  };
   const duplicateView = async (name: string) => {
     setItemStrings([...itemStrings, name]);
     setSelected(itemStrings.length);
     await sleep(1);
     return true;
   };
+
+  useEffect(() => {
+    fetchData();
+  }, [popupEvent, toggleActive]);
 
   const tabs: TabProps[] = itemStrings.map((item, index) => ({
     content: item,
@@ -298,38 +372,56 @@ export default function Index() {
     },
   ];
   const resourceName = {
-    singular: "order",
-    plural: "orders",
+    singular: "audio",
+    plural: "audio",
   };
 
   const { selectedResources, allResourcesSelected, handleSelectionChange } =
-    useIndexResourceState(orders);
+    useIndexResourceState(audio);
 
-  const rowMarkup = orders.map(
-    (
-      { id, order, date, customer, total, paymentStatus, fulfillmentStatus },
-      index,
-    ) => (
+  const rowMarkup = audio.map(
+    ({ id, name, status, size, mimetype, createdAt, fileName }, index) => (
       <IndexTable.Row
         id={id}
         key={id}
         selected={selectedResources.includes(id)}
         position={index}
       >
+        <IndexTable.Cell>{name}</IndexTable.Cell>
+        <IndexTable.Cell>{bytesToMB(size)}</IndexTable.Cell>
+        <IndexTable.Cell>{mimetype}</IndexTable.Cell>
+        <IndexTable.Cell>{dateTime(createdAt)}</IndexTable.Cell>
         <IndexTable.Cell>
-          <Text variant="bodyMd" fontWeight="bold" as="span">
-            {order}
-          </Text>
+          {" "}
+          <Box maxWidth="150px">
+            <InlineStack wrap={false} gap="300">
+              <Link onClick={() => copyLink(fileName)}>
+                <Tooltip content="Link" dismissOnMouseOut key={id}>
+                  <Icon source={LinkIcon} accessibilityLabel="Accept" />
+                </Tooltip>
+              </Link>
+
+              {/* <Link onClick={() => {}}>
+                <Tooltip content="Reject" dismissOnMouseOut key={id}>
+                  <Icon
+                    source={ViewIcon}
+                    tone="info"
+                    accessibilityLabel="Reject"
+                  />
+                </Tooltip>
+              </Link> */}
+              <Link onClick={() => deleteData(id)}>
+                <Tooltip content="Delete" dismissOnMouseOut key={id}>
+                  <Icon
+                    source={DeleteIcon}
+                    tone="critical"
+                    accessibilityLabel="Delete"
+                  />
+                </Tooltip>
+              </Link>
+            </InlineStack>
+          </Box>
         </IndexTable.Cell>
-        <IndexTable.Cell>{date}</IndexTable.Cell>
-        <IndexTable.Cell>{customer}</IndexTable.Cell>
-        <IndexTable.Cell>
-          <Text as="span" alignment="end" numeric>
-            {total}
-          </Text>
-        </IndexTable.Cell>
-        <IndexTable.Cell>{paymentStatus}</IndexTable.Cell>
-        <IndexTable.Cell>{fulfillmentStatus}</IndexTable.Cell>
       </IndexTable.Row>
     ),
   );
@@ -337,8 +429,8 @@ export default function Index() {
   return (
     <Page fullWidth>
       <ui-title-bar title="File List">
-        <button variant="primary" onClick={() => {}}>
-          Add File
+        <button variant="primary" onClick={toggleActive}>
+          Upload Files
         </button>
       </ui-title-bar>
       <IndexFilters
@@ -375,16 +467,22 @@ export default function Index() {
         }
         onSelectionChange={handleSelectionChange}
         headings={[
-          { title: "Order" },
+          { title: "Name" },
+          { title: "size" },
+          { title: "File Type" },
           { title: "Date" },
-          { title: "Customer" },
-          { title: "Total", alignment: "end" },
-          { title: "Payment status" },
-          { title: "Fulfillment status" },
+          { title: "Action" },
         ]}
       >
         {rowMarkup}
       </IndexTable>
+
+      <FileUpload
+        toggleActive={toggleActive}
+        active={active}
+        setPopuupEvent={setPopuupEvent}
+        fetchData={fetchData}
+      />
     </Page>
   );
 

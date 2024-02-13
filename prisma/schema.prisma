@@ -22,9 +22,10 @@ model Session {
 }
 
 model File {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid())
   name      String
   status    String
   size      String
+  path      String
   createdAt DateTime @default(now())
 }
