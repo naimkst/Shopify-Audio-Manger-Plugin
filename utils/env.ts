@@ -1,1 +1,1 @@
-export const API_URL = "https://audio-managers.onrender.com";
+export const API_URL = "https://podcast-node.everythingbreslov.com";
