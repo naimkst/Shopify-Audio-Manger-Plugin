@@ -1,0 +1,27 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "fd7e230fe7eb33dc859b3381bbc68ce5"
+name = "podcast-test"
+application_url = "https://powers-keeps-authorization-heavily.trycloudflare.com"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+dev_store_url = "blogs-comment.myshopify.com"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = ""
+
+[auth]
+redirect_urls = [
+  "https://powers-keeps-authorization-heavily.trycloudflare.com/auth/callback",
+  "https://powers-keeps-authorization-heavily.trycloudflare.com/auth/shopify/callback",
+  "https://powers-keeps-authorization-heavily.trycloudflare.com/api/auth/callback"
+]
+
+[webhooks]
+api_version = "2024-01"
+
+[pos]
+embedded = false

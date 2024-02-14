@@ -8,6 +8,7 @@ import {
   Thumbnail,
   BlockStack,
   Text,
+  Spinner,
 } from "@shopify/polaris";
 import { useState, useCallback } from "react";
 import { PrismaClient } from "@prisma/client";
@@ -28,8 +29,10 @@ export const FileUpload = ({
 }: any) => {
   const [checked, setChecked] = useState(false);
   const [audioFile, setAudioFile] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
 
   const handleFileUpload = async () => {
+    setLoading(true);
     try {
       const formData = new FormData();
       formData.append("file", audioFile);
@@ -42,6 +45,8 @@ export const FileUpload = ({
       if (data) {
         shopify.toast.show(data.message);
         fetchData();
+        setLoading(false);
+        toggleActive();
       }
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -64,15 +69,16 @@ export const FileUpload = ({
           title="Import Your Files"
           primaryAction={{
             content: "Submit",
+            disabled: loading ? true : false,
             onAction: () => {
               handleFileUpload();
               setPopuupEvent(String(Math.random()));
-              toggleActive();
             },
           }}
           secondaryActions={[
             {
               content: "Cancel",
+              disabled: loading ? true : false,
               onAction: () => {
                 setAudioFile(null);
                 setPopuupEvent(String(Math.random()));
@@ -83,31 +89,37 @@ export const FileUpload = ({
         >
           <Modal.Section>
             <Box>
-              <DropZone
-                accept="*"
-                errorOverlayText="File type must be .csv"
-                type="file"
-                onDrop={(files) => {
-                  setAudioFile(files[0]);
-                }}
-              >
-                {audioFile ? (
-                  <BlockStack align="center" inlineAlign="center">
-                    <Box padding="100">
-                      <Thumbnail
-                        source={NoteIcon}
-                        size="large"
-                        alt="Small document"
-                      />
-                    </Box>
-                    <Text variant="headingSm" as="h6">
-                      {String(audioFile["name"])}
-                    </Text>
-                  </BlockStack>
-                ) : (
-                  <DropZone.FileUpload />
-                )}
-              </DropZone>
+              {loading ? (
+                <BlockStack gap="500" align="center" inlineAlign="center">
+                  <Spinner accessibilityLabel="Spinner example" size="large" />
+                </BlockStack>
+              ) : (
+                <DropZone
+                  accept="*"
+                  errorOverlayText="File type must be .csv"
+                  type="file"
+                  onDrop={(files) => {
+                    setAudioFile(files[0]);
+                  }}
+                >
+                  {audioFile ? (
+                    <BlockStack align="center" inlineAlign="center">
+                      <Box padding="100">
+                        <Thumbnail
+                          source={NoteIcon}
+                          size="large"
+                          alt="Small document"
+                        />
+                      </Box>
+                      <Text variant="headingSm" as="h6">
+                        {String(audioFile["name"])}
+                      </Text>
+                    </BlockStack>
+                  ) : (
+                    <DropZone.FileUpload />
+                  )}
+                </DropZone>
+              )}
             </Box>
           </Modal.Section>
         </Modal>

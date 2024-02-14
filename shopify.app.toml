@@ -1,8 +1,8 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "92bf621a4b8baf5ded60f80957a2a613"
-name = "audio-manager"
-application_url = "https://jane-suit-hazards-covers.trycloudflare.com"
+name = "podcast-manager"
+application_url = "https://jokes-effectiveness-bizarre-gage.trycloudflare.com"
 embedded = true
 
 [build]
@@ -15,9 +15,9 @@ scopes = "write_products"
 
 [auth]
 redirect_urls = [
-  "https://jane-suit-hazards-covers.trycloudflare.com/auth/callback",
-  "https://jane-suit-hazards-covers.trycloudflare.com/auth/shopify/callback",
-  "https://jane-suit-hazards-covers.trycloudflare.com/api/auth/callback"
+  "https://jokes-effectiveness-bizarre-gage.trycloudflare.com/auth/callback",
+  "https://jokes-effectiveness-bizarre-gage.trycloudflare.com/auth/shopify/callback",
+  "https://jokes-effectiveness-bizarre-gage.trycloudflare.com/api/auth/callback"
 ]
 
 [webhooks]
