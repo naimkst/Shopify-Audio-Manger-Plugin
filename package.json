@@ -1,5 +1,5 @@
 {
-  "name": "audio-manager",
+  "name": "podcast-manager",
   "private": true,
   "scripts": {
     "build": "tsc && remix build",
